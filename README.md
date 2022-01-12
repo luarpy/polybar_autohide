@@ -8,6 +8,8 @@ This script toggles polybars hide/show state by checking the presence of active 
 
 I am planing to add a PID variable so the script only applies to a specific polybar proccess.
 
+**IT HIDES POLYBAR SHOW IN FULL SCREEN SHOULD HIDE THE SYSTEM TRAY ICONS**. See [issue](https://github.com/polybar/polybar/issues/425)
+
 ## Installation
 
 Clone this repository
