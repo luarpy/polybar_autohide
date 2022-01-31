@@ -31,6 +31,7 @@ bash ~/.config/polybar/scripts/autohide-polybar.sh &
 
 - xdotool
 - xprop
+- xrandr
 
 ## License
 

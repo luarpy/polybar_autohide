@@ -5,8 +5,11 @@ PID=
 MARGIN_TOP=5
 MARGIN_HIDE_TOP=50
 DEBUG=1
-CURSOR_WINDOW_DELAY=1
 INTERVAL=1
+top=0
+bottom=5
+left=5
+right=5
 
 VERSION='0.1'
 
@@ -16,12 +19,13 @@ Usage: autohide-polybar [action] [-p <PID>]
 
 Options:
   -h, --help show this message
-  -p, --pid  bars PID. Used to identify which bar must be used
+  -p, --pid=  bars PID. Used to identify which bar must be used
+  -a, --paddings= screen margins. <top>,<right>,<bottom>,<left>. Defaults are $top, $right, $bottom, $left
 EOF
 }
 
 version(){
-printf %s\\n "Version: $VERSION"
+  printf %s\\n "Version: $VERSION"
 }
 
 getPointer(){
@@ -37,17 +41,39 @@ show(){
   polybar-msg cmd show "$([ -n $PID ] && printf -- "-p $PID")"
 }
 
-toggle(){
-  polybar-msg cmd toggle "$([ -n $PID ] && printf -- "-p $PID")"
+getScreenSize(){
+  xrandr -q | grep 'current' | cut -d ',' -f2 | tr -d 'current\| ' 2>&2
+}
+
+getWindow(){
+  local window="$(xdotool getactivewindow)" # window ID
+  window="$(xdotool getwindowgeometry --shell "$window")"
+  local x y screenwidth screenheight screensize
+  screensize="$(getScreenSize)"
+  screenwidth="$(printf "$screensize" | cut -d 'x' -f1)"
+  screenheight="$(printf "$screensize" | cut -d 'x' -f2)"
+  width="$(printf "$window" | grep 'WIDTH=' | tr -d 'WIDTH=')"
+  height="$(printf "$window" | grep 'HEIGHT=' | tr -d 'HEIGHT=')"
+  
+  if [ "$DEBUG" -eq 0 ]; then
+    printf %s\\n "Screen Size: $screenwidth x $screenheight" \
+      "Window Geometry: $width x $height" >&2
+  fi
+
+  if [ "$width" -ge "$screenwidth" ] && [ "$height" -ge "$screenheight" ]; then
+    printf 2
+  else
+    printf 0
+  fi
 }
 
 windowPresence(){
-  local windownumber="$(xdotool getactivewindow)"
+  # FIXME: encontrar una manera mejor de devolver la presencia de ventanas o no. De manera ideal debería devolver la presencia de ventanas (0) para los casos en los que hay una ventana en Maximize mode o Full Screen Mode. 
+  local windownumber="$(getWindow)"
   if [ $DEBUG -eq 0 ]; then
-    printf %s\\n "$? window number: $windownumber" >&2
+    printf %s\\n "window state: $windownumber" >&2
   fi
-  # FIXME: arreglar esto. No devuelve bien cuantas ventanas hay. Si no hubiese ventanas sería vacía la respuesta 
-  [ -z "$windownumber" ] && printf 1 || printf 0
+  [ -z "$windownumber" ] && printf 1 || printf "$windownumber"
 }
 
 main(){
@@ -55,6 +81,7 @@ main(){
   polybarshown=0
   show
   while :; do
+    # Get initial values
     pointer="$(getPointer)" 
     windowpresence="$(windowPresence)"
 
@@ -64,37 +91,39 @@ main(){
         ", polybarShown: $polybarshown" \
         ", PID: $PID"
     fi
-
+    
     # If no windows, then show polybar
-    if [ "$windowpresence" -eq 1 ]; then
-      if [ "$polybarshown" -eq 1 ]; then
-        windowpresence="$(windowPresence)"
-        
-        if [ "$windowpresence" -eq 1 ]; then
-          polybarshown=0
-          show
-        fi
-      fi
-    elif [ $polybarshown -eq 1 ]; then
-      # If there is a window and polybar is hidden we want to unhide it if mouse is at the top
-      if [ $pointer -lt $MARGIN_TOP ]; then
-#        sleep $CURSOR_WINDOW_DELAY
+    if [ $windowpresence -eq 1 ]; then
+        polybarshown=0
+        show
+    elif [ $windowpresence -eq 0 ]; then
         pointer="$(getPointer)"
-        if [ $pointer -lt $MARGIN_TOP ]; then
+        if [ $pointer -gt $MARGIN_HIDE_TOP ]; then # if mouse is under bar's area
+          # Check if window size is lower than widnowsize+margin
+          # FIXME: make this more efficient. Must not need theses amount of variables
+          local window="$(xdotool getactivewindow)" # window ID
+          window="$(xdotool getwindowgeometry --shell "$window")"
+          local x y screenwidth screenheight screensize
+          screensize="$(getScreenSize)"
+          screenwidth="$(printf "$screensize" | cut -d 'x' -f1)"
+          screenheight="$(printf "$screensize" | cut -d 'x' -f2)"
+          width="$(printf "$window" | grep 'WIDTH=' | tr -d 'WIDTH=')"
+          height="$(printf "$window" | grep 'HEIGHT=' | tr -d 'HEIGHT=')"
+          if [ $height -lt $(($screenheight - $bottom - $top)) ] && [ $width -lt $(($screenwidth - $left - $right)) ] ; then
+            poybarshow=0
+            show
+          else
+            polybarshown=1
+            hide
+          fi
+        elif [ $pointer -lt $MARGIN_TOP ]; then # if mouse is over bar's area
           polybarshown=0
           show
         fi
-      fi
-    else
-      # else there is a window an polybar is shown, we want to hide it if mouse moves away
-      if [ $pointer -gt $MARGIN_HIDE_TOP ]; then
-        echo hola
-        polybarshown=1
-        hide
-      fi
-
+    elif [ $windowpresence -eq 2 ]; then
+      polybarshown=1
+      hide
     fi
-
     sleep $INTERVAL
   done
   
@@ -121,6 +150,21 @@ while [ "$#" -gt 0 ]; do
       shift
       param="$1"
       PID="$param"
+      ;;
+    --margin-top=)
+      shift
+      MARGIN_TOP="$1"
+      ;;
+    --margin-top-hide)
+      shift
+      MARGIN_HIDE_TOP="$1"
+      ;;
+    -a|--paddings=)
+      shift 
+      top="$(printf "$1" | cut -d ',' -f1)"
+      right="$(printf "$1" | cut -d ',' -f2)"
+      bottom="$(printf "$1" | cut -d ',' -f3)"
+      left="$(printf "$1" | cut -d ',' -f4)"
       ;;
   esac
 done
