@@ -68,12 +68,13 @@ getWindow(){
       "Window Geometry: $width x $height" >&2
   fi
 
-  if [ "$width" -ge "$screenwidth" ] && [ "$height" -ge "$screenheight" ]; then
-    printf 2 # Return 2 if current screen is in fullscreenmodej
-  elif [[ $width -ge $(($screenwidth - 10)) && $height -ge $(($screenheight - 5 )) ]]; then # FIXME: debería comprobar si la pantalla está en modo maximizado. Tal vez con tags de xorg o así pueda detectarse
-    printf 0 # Return 0 if current screen is maximized
-  else 
+
+  if [[ $width -lt $(($screenwidth - 10)) && $height -lt $(($screenheight - 5)) ]]; then
     printf 1
+  elif [[ $width -lt $screenwidth && $height -lt $screenheight ]]; then
+    printf 0
+  else
+    printf 2
   fi
 }
 
